@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"myblog/internal/bot"
+	"myblog/internal/config"
 	"myblog/internal/handlers"
 	"myblog/internal/repo"
+	"myblog/internal/telegram"
 	"myblog/internal/templates"
 	"net/http"
 	"os"
 
-	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
@@ -22,28 +24,31 @@ type PageData struct {
 }
 
 func main() {
-	godotenv.Load()
+	cfg := config.Load()
 
-	// БД
-	db, err := sql.Open("postgres", os.ExpandEnv("host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD sslmode=$DB_SSLMODE"))
+	connStr := fmt.Sprintf(
+		"host=%s port=%s dbname=%s user=%s password=%s sslmode=%s",
+		cfg.DBHost, cfg.DBPort, cfg.DBName,
+		cfg.DBUser, cfg.DBPassword, cfg.DBSSLMode,
+	)
+
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Ошибка подключения к БД:", err)
+		telegram.Send("Блог не запустился! Ошибка подключения к БД: " + err.Error())
 	}
 	if err = db.Ping(); err != nil {
-		log.Fatal(err)
+		log.Fatal("Не удалось пингануть БД:", err)
 	}
+	fmt.Println("Подключено к PostgreSQL")
 
-	// Репозиторий
 	repo := repo.NewRepository(db)
-
-	// Шаблоны
 	tpl, err := template.ParseFS(templates.FS, "index.html", "post.html", "admin_login.html")
 	if err != nil {
-		log.Fatal("Шаблоны не найдены:", err)
+		log.Fatal("Ошибка загрузки шаблонов:", err)
 	}
 
-	// Хендлеры
-	h := handlers.NewHandler(repo, tpl)
+	h := handlers.NewHandler(repo, tpl, cfg) // ← передаём конфиг
 
 	// Маршруты
 	// === АДМИНКА ===
@@ -66,6 +71,27 @@ func main() {
 	if port == "" {
 		port = "3000"
 	}
+
+	// подключаем тг-бот
+	go func() {
+		bot, err := bot.NewBot(os.Getenv("TG_BOT_TOKEN"), repo)
+		if err != nil {
+			log.Fatal("Не удалось запустить Telegram‑бота:", err)
+		}
+		bot.Start()
+	}()
 	fmt.Printf("Блог запущен → http://localhost:%s\n", port)
+	telegram.Send(fmt.Sprintf("Блог запущен!\nhttp://localhost:%s", port))
+
+	// Защита от паники
+	defer func() {
+		if r := recover(); r != nil {
+			errMsg := fmt.Sprintf("ПАНИКА! Блог упал: %v", r)
+			log.Println(errMsg)
+			telegram.Send(errMsg)
+			panic(r)
+		}
+	}()
+
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

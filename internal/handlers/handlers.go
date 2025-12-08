@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"html/template"
-	"myblog/internal/auth"
+	"myblog/internal/config"
 	"myblog/internal/models"
 	"myblog/internal/repo"
 	"net/http"
@@ -14,16 +14,21 @@ const MySiteTitle = "Trash"
 type Handler struct {
 	repo *repo.Repository
 	tpl  *template.Template
+	cfg  *config.Config
 }
 
 func (h *Handler) isAdmin(r *http.Request) bool {
-	return auth.IsAuthenticated(r)
+	cookie, _ := r.Cookie("admin_session")
+	return cookie != nil && cookie.Value == h.cfg.AdminPassword
 }
 
-func NewHandler(repo *repo.Repository, tpl *template.Template) *Handler {
-	return &Handler{repo: repo, tpl: tpl}
+func NewHandler(repo *repo.Repository, tpl *template.Template, cfg *config.Config) *Handler {
+	return &Handler{
+		repo: repo,
+		tpl:  tpl,
+		cfg:  cfg,
+	}
 }
-
 func (h *Handler) HomeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -37,9 +42,9 @@ func (h *Handler) HomeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"SiteTitle": MySiteTitle,
+		"IsAdmin":   h.isAdmin(r),
+		"SiteTitle": h.cfg.SiteTitle, // ← ЭТОЙ СТРОКИ НЕ БЫЛО!
 		"Posts":     posts,
-		"IsAdmin":   h.isAdmin(r), // ← ЭТОЙ СТРОКИ НЕ БЫЛО!
 	}
 
 	if err := h.tpl.ExecuteTemplate(w, "index.html", data); err != nil {
@@ -53,10 +58,6 @@ func (h *Handler) NewPostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
-	h.tpl.ExecuteTemplate(w, "index.html", map[string]any{
-		"NewPost": true,
-		"IsAdmin": true,
-	})
 }
 
 // Создание поста
