@@ -1,3 +1,4 @@
+// internal/handlers/handlers.go
 package handlers
 
 import (
@@ -5,21 +6,15 @@ import (
 	"myblog/internal/config"
 	"myblog/internal/models"
 	"myblog/internal/repo"
+	"myblog/internal/services"
 	"net/http"
 	"strconv"
 )
-
-const MySiteTitle = "Trash"
 
 type Handler struct {
 	repo *repo.Repository
 	tpl  *template.Template
 	cfg  *config.Config
-}
-
-func (h *Handler) isAdmin(r *http.Request) bool {
-	cookie, _ := r.Cookie("admin_session")
-	return cookie != nil && cookie.Value == h.cfg.AdminPassword
 }
 
 func NewHandler(repo *repo.Repository, tpl *template.Template, cfg *config.Config) *Handler {
@@ -29,6 +24,13 @@ func NewHandler(repo *repo.Repository, tpl *template.Template, cfg *config.Confi
 		cfg:  cfg,
 	}
 }
+
+func (h *Handler) isAdmin(r *http.Request) bool {
+	cookie, _ := r.Cookie("admin_session")
+	return cookie != nil && cookie.Value == h.cfg.AdminPassword
+}
+
+// Главная
 func (h *Handler) HomeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -43,7 +45,7 @@ func (h *Handler) HomeHandler(w http.ResponseWriter, r *http.Request) {
 
 	data := map[string]any{
 		"IsAdmin":   h.isAdmin(r),
-		"SiteTitle": h.cfg.SiteTitle, // ← ЭТОЙ СТРОКИ НЕ БЫЛО!
+		"SiteTitle": h.cfg.SiteTitle,
 		"Posts":     posts,
 	}
 
@@ -52,20 +54,47 @@ func (h *Handler) HomeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Новая запись — форма
-func (h *Handler) NewPostHandler(w http.ResponseWriter, r *http.Request) {
-	if !h.isAdmin(r) {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+// ← ДОБАВЛЕННЫЙ МЕТОД — БЕЗ НЕГО НЕ РАБОТАЕТ /post/1 !
+func (h *Handler) PostHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Path[len("/post/"):]
+	id, _ := strconv.Atoi(idStr)
+	if id < 1 {
+		http.NotFound(w, r)
 		return
 	}
+
+	post, err := h.repo.GetPostByID(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	data := map[string]any{
+		"Title":     post.Title,
+		"HTML":      services.RenderMarkdown(post.Content),
+		"ID":        post.ID,
+		"IsAdmin":   h.isAdmin(r),
+		"SiteTitle": h.cfg.SiteTitle,
+		"CreatedAt": post.CreatedAt,
+	}
+
+	if err := h.tpl.ExecuteTemplate(w, "post.html", data); err != nil {
+		http.Error(w, "Ошибка шаблона", http.StatusInternalServerError)
+	}
+}
+
+// Новая запись
+func (h *Handler) NewPostHandler(w http.ResponseWriter, r *http.Request) {
+	data := map[string]any{
+		"NewPost":   true,
+		"IsAdmin":   true,
+		"SiteTitle": h.cfg.SiteTitle,
+	}
+	h.tpl.ExecuteTemplate(w, "index.html", data)
 }
 
 // Создание поста
 func (h *Handler) CreatePostHandler(w http.ResponseWriter, r *http.Request) {
-	if !h.isAdmin(r) {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
-		return
-	}
 	r.ParseForm()
 	title := r.FormValue("title")
 	content := r.FormValue("content")
@@ -83,12 +112,8 @@ func (h *Handler) CreatePostHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/post/"+strconv.Itoa(post.ID), http.StatusSeeOther)
 }
 
-// Редактирование — форма
+// Редактирование
 func (h *Handler) EditPostHandler(w http.ResponseWriter, r *http.Request) {
-	if !h.isAdmin(r) {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
-		return
-	}
 	idStr := r.URL.Path[len("/edit/"):]
 	id, _ := strconv.Atoi(idStr)
 	post, err := h.repo.GetPostByID(id)
@@ -97,19 +122,17 @@ func (h *Handler) EditPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.tpl.ExecuteTemplate(w, "index.html", map[string]any{
-		"EditPost": true,
-		"Post":     post,
-		"IsAdmin":  true,
-	})
+	data := map[string]any{
+		"EditPost":  true,
+		"Post":      post,
+		"IsAdmin":   true,
+		"SiteTitle": h.cfg.SiteTitle,
+	}
+	h.tpl.ExecuteTemplate(w, "index.html", data)
 }
 
-// Обновление поста
+// Обновление
 func (h *Handler) UpdatePostHandler(w http.ResponseWriter, r *http.Request) {
-	if !h.isAdmin(r) {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
-		return
-	}
 	r.ParseForm()
 	idStr := r.URL.Path[len("/update/"):]
 	id, _ := strconv.Atoi(idStr)
@@ -125,12 +148,8 @@ func (h *Handler) UpdatePostHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/post/"+strconv.Itoa(id), http.StatusSeeOther)
 }
 
-// Удаление поста
+// Удаление
 func (h *Handler) DeletePostHandler(w http.ResponseWriter, r *http.Request) {
-	if !h.isAdmin(r) {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
-		return
-	}
 	idStr := r.URL.Path[len("/delete/"):]
 	id, _ := strconv.Atoi(idStr)
 	h.repo.DeletePost(id)

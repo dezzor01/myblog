@@ -67,10 +67,7 @@ func main() {
 	http.HandleFunc("/post/", h.PostHandler)
 	http.HandleFunc("/", h.HomeHandler)
 
-	port := os.Getenv("SERVER_PORT")
-	if port == "" {
-		port = "3000"
-	}
+	port := cfg.ServerPort
 
 	// подключаем тг-бот
 	go func() {
