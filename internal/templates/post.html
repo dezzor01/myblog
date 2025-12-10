@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}} — {{.SiteTitle}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+  <header class="bg-white shadow-sm border-b">
+    <div class="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
+      <h1 class="text-3xl font-bold text-gray-900">
+        <a href="/" class="hover:text-blue-600 transition">{{.SiteTitle}}</a>
+      </h1>
+      {{if .IsAdmin}}
+        <div class="flex items-center gap-5">
+          <a href="/new" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium">
+            + Написать
+          </a>
+          <form action="/logout" method="POST" class="inline">
+            <button type="submit" class="border-2 border-red-600 text-red-600 hover:bg-red-50 px-6 py-3 rounded-lg font-semibold">
+              Выйти
+            </button>
+          </form>
+        </div>
+      {{end}}
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-6 py-12">
+    <article class="bg-white rounded-xl shadow-lg p-10">
+      <h1 class="text-4xl font-bold mb-6">{{.Title}}</h1>
+      <time class="text-gray-500 block mb-10">
+        {{.CreatedAt.Format "02 января 2006"}}
+      </time>
+      <div class="prose prose-lg max-w-none">
+        {{.HTML}}
+      </div>
+
+      {{if .IsAdmin}}
+        <div class="mt-12 pt-8 border-t flex gap-6">
+          <a href="/edit/{{.ID}}" class="text-blue-600 hover:underline">Редактировать</a>
+          <a href="/delete/{{.ID}}" class="text-red-600 hover:underline">Удалить</a>
+        </div>
+      {{end}}
+    </article>
+
+    <div class="mt-8 text-center">
+      <a href="/" class="text-blue-600 hover:underline text-lg">← На главную</a>
+    </div>
+  </main>
+</body>
+</html>

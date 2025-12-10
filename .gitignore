@@ -1,0 +1,36 @@
+# Критичные файлы
+.env
+.env.local
+.env.*               # любые .env файлы
+*.env
+
+# Docker — только личные оверрайды
+docker-compose.override.yml
+
+# Go
+/bin/
+/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# IDE и редакторы
+.idea/
+.vscode/
+*.code-workspace
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+._*
+
+# Логи и временные файлы
+*.log
+*~
+.#*
+
+# Локальные данные БД (если тестируешь без Docker)
+data/
+pgdata/
